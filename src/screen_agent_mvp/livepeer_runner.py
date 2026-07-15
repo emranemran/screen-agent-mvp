@@ -34,7 +34,7 @@ log = logging.getLogger("screen-agent-runner")
 
 
 async def _handle_health(request: web.Request) -> web.Response:
-    return web.json_response({"status": "ok", "app": APP_ID})
+    return web.json_response({"status": "ok", "app": request.app.get("app_id", APP_ID)})
 
 
 async def _handle_analyze(request: web.Request) -> web.Response:
@@ -91,6 +91,23 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
+        "--app-id",
+        default=APP_ID,
+        help="App id advertised in discovery (e.g. livepeer-example/screen-agent).",
+    )
+    parser.add_argument(
+        "--price",
+        type=int,
+        default=0,
+        help="Price in USD per pixels-per-unit (0 = free, the offchain default).",
+    )
+    parser.add_argument(
+        "--pixels-per-unit",
+        type=int,
+        default=1,
+        help="Scale factor: price is charged per this many units.",
+    )
+    parser.add_argument(
         "--strict-models",
         action="store_true",
         help="Require PaddleOCR, OmniParser, and Qwen2.5-VL (no fallbacks).",
@@ -119,14 +136,14 @@ def main() -> None:
             args.orchestrator,
             secret=args.orchSecret,
             runner_url=args.runner_url,
-            app=APP_ID,
+            app=args.app_id,
             # Analysis is single-shot by nature; persistent until single-shot
             # payment lands upstream (go-livepeer#3955). Offchain → free.
             mode="persistent",
             # One analysis at a time — the pipeline saturates CPU/GPU.
             capacity=1,
-            price_per_unit=0,
-            pixels_per_unit=1,
+            price_per_unit=args.price,
+            pixels_per_unit=args.pixels_per_unit,
         )
         log.info(
             "registered runner_id=%s orchestrator=%s",
@@ -139,6 +156,7 @@ def main() -> None:
             await app["registration"].close()  # Livepeer: 2
 
     app = create_app(config)
+    app["app_id"] = args.app_id
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
     web.run_app(app, host=args.host, port=args.port)

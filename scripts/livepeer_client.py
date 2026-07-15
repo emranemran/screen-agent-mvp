@@ -36,6 +36,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze a screen recording via Livepeer.")
     parser.add_argument("video", type=Path, help="Local .mp4/.webm screen recording")
     parser.add_argument("--discovery", default="https://localhost:8935/discovery")
+    parser.add_argument("--app", default=APP_ID, help="App id to reserve (matches --app-id on the runner).")
     parser.add_argument("--preset", default="bug-report")
     parser.add_argument("--out", type=Path, default=Path("livepeer-run"))
     parser.add_argument("--signer", default="", help="Remote signer base URL (on-chain path).")
@@ -49,7 +50,7 @@ async def main() -> None:
     session = None
     try:
         session = await reserve_session(  # Livepeer: 1
-            discovery_url=args.discovery, app=APP_ID, signer_url=signer_url
+            discovery_url=args.discovery, app=args.app, signer_url=signer_url
         )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
