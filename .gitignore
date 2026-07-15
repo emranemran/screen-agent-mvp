@@ -1,0 +1,15 @@
+.venv/
+.venv-win/
+.venv-wsl/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+runs/
+*.egg-info/
+codex_wsl_ed25519
+codex_wsl_ed25519.pub
+.ssh_known_hosts
+*.pyc
+.tmp/
+livepeer-run/
+*.mp4
