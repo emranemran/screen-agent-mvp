@@ -1,0 +1,37 @@
+# Offchain orchestrator for the screen-agent live runner.
+#
+# Derived from app-examples/compose.orchestrator.yml with ONE change:
+# -liveRunnerAddr points at https://localhost:8935 instead of the Docker-internal
+# https://orchestrator:8935, because our runner runs on the WSL HOST (it needs the
+# GPU + model weights), not inside the compose network. Runners heartbeat to this
+# address, so it must resolve wherever the runner lives.
+#
+# Usage:
+#   docker compose -f livepeer/docker-compose.yml up -d
+#   uv run screen-agent-runner --host 0.0.0.0 --runner-url http://host.docker.internal:8989
+#
+# The go-livepeer image entrypoint is `livepeer`, so `command:` is flags only.
+
+services:
+  orchestrator:
+    image: livepeer/go-livepeer:ja-live-runner
+    container_name: screen_agent_orchestrator
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      - -serviceAddr=127.0.0.1:8935
+      - -httpAddr=0.0.0.0:8935
+      - -liveRunnerAddr=https://localhost:8935
+      - -orchSecret=abcdef
+      - -network=offchain
+      - -monitor=false
+      - -v=6
+    ports:
+      - "8935:8935"
+    # Same TLS-aware healthcheck as app-examples: the image only has openssl.
+    healthcheck:
+      test: printf 'GET /healthz HTTP/1.0\r\n\r\n' | openssl s_client -connect 127.0.0.1:8935 -quiet 2>/dev/null | grep -q '200 OK'
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
