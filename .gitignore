@@ -13,3 +13,4 @@ codex_wsl_ed25519.pub
 .tmp/
 livepeer-run/
 *.mp4
+livepeer/.env*

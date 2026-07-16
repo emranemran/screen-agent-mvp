@@ -1,0 +1,48 @@
+# ON-CHAIN overlay: re-points the orchestrator at Arbitrum One mainnet and
+# advertises the box's Tailscale name so tailnet-shared clients can reach it.
+#
+# Layered on the offchain base (image/ports/healthcheck inherited from there):
+#   docker compose -f livepeer/docker-compose.yml -f livepeer/docker-compose.onchain.yml \
+#     --env-file livepeer/.env.onchain up -d
+#
+# Secrets come from livepeer/.env.onchain (gitignored) and from keystore files
+# fetched out-of-repo (see comments below). Never commit either.
+#
+#   TS_NAME        Tailscale MagicDNS name of the WINDOWS host (Docker publishes
+#                  8935 there), e.g. lpt.tail3396e5.ts.net
+#   ORCH_SECRET    registration password for runners (not 'abcdef' — clients
+#                  can't use it, but it gates who may register apps)
+#   ARB_RPC_URL    Arbitrum One RPC (public https://arb1.arbitrum.io/rpc works)
+#   ORCH_ETH_ACCT  keystore address (here also the registered orch identity)
+#
+# Keystore + passphrase live in ~/.livepeer-onchain/ (chmod 600, outside git),
+# fetched from GCP Secret Manager (scope-stg-orch-wallet / scope-stg-orch-passphrase).
+
+services:
+  orchestrator:
+    command:
+      - -orchestrator
+      - -useLiveRunners
+      # Advertised to clients in discovery — must be reachable from the tailnet.
+      - -serviceAddr=${TS_NAME}:8935
+      - -httpAddr=0.0.0.0:8935
+      # Runners heartbeat here; ours is on this box, so loopback via published port.
+      - -liveRunnerAddr=https://localhost:8935
+      - -orchSecret=${ORCH_SECRET}
+      - -network=arbitrum-one-mainnet
+      - -ethUrl=${ARB_RPC_URL}
+      - -ethKeystorePath=/keystore
+      - -ethAcctAddr=${ORCH_ETH_ACCT}
+      - -ethPassword=/pw.txt
+      # Same address: the staging orch wallet IS the registered orch identity.
+      - -ethOrchAddr=${ORCH_ETH_ACCT}
+      # Legacy base price — unused for live runners (price comes from app
+      # registration) but an on-chain orchestrator won't boot without it.
+      - -pricePerUnit=0
+      # EV per ticket; default (8e9) trips the 100-tickets-per-payment cap.
+      - -ticketEV=1000000000000
+      - -monitor=false
+      - -v=6
+    volumes:
+      - ${HOME}/.livepeer-onchain/keystore:/keystore:ro
+      - ${HOME}/.livepeer-onchain/password.txt:/pw.txt:ro
