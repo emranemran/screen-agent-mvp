@@ -46,3 +46,9 @@ services:
     volumes:
       - ${HOME}/.livepeer-onchain/keystore:/keystore:ro
       - ${HOME}/.livepeer-onchain/password.txt:/pw.txt:ro
+    # The orchestrator dials its own serviceAddr at boot and exits if
+    # unreachable. The container isn't on the tailnet, so resolve the tailnet
+    # name to the Docker host (where 8935 is published) INSIDE the container
+    # only; external clients still resolve the real Tailscale address.
+    extra_hosts:
+      - "${TS_NAME}:host-gateway"
