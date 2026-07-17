@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from contextlib import suppress
 from pathlib import Path
 
@@ -40,6 +41,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--preset", default="bug-report")
     parser.add_argument("--out", type=Path, default=Path("livepeer-run"))
     parser.add_argument("--signer", default="", help="Remote signer base URL (on-chain path).")
+    parser.add_argument(
+        "--signer-key",
+        default=os.getenv("DAYDREAM_API_KEY", ""),
+        help="Bearer token for the remote signer (defaults to $DAYDREAM_API_KEY). "
+        "Required by signers with an auth front door, e.g. signer.daydream.live.",
+    )
     return parser.parse_args()
 
 
@@ -47,10 +54,18 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parse_args()
     signer_url = args.signer.strip() or None
+    signer_headers = (
+        {"Authorization": f"Bearer {args.signer_key.strip()}"}
+        if signer_url and args.signer_key.strip()
+        else None
+    )
     session = None
     try:
         session = await reserve_session(  # Livepeer: 1
-            discovery_url=args.discovery, app=args.app, signer_url=signer_url
+            discovery_url=args.discovery,
+            app=args.app,
+            signer_url=signer_url,
+            signer_headers=signer_headers,
         )
         log.info("session_id=%s app_url=%s", session.session_id, session.app_url)
 
@@ -61,6 +76,7 @@ async def main() -> None:
                 "preset": args.preset,
             },
             signer_url=signer_url,
+            signer_headers=signer_headers,
             timeout=CALL_TIMEOUT_S,
         )
         data = result.data
