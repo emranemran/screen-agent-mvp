@@ -65,3 +65,17 @@ async def test_health(aiohttp_client):
     assert resp.status == 200
     body = await resp.json()
     assert body["app"] == "emran/screen-agent"
+
+
+async def test_capability_served_when_configured(aiohttp_client):
+    descriptor = {"capability": {"semantic_key": "live-runner:video-understanding:screen-agent:-"}}
+    client = await aiohttp_client(create_app(_config(), capability=descriptor))
+    resp = await client.get("/capability")
+    assert resp.status == 200
+    assert await resp.json() == descriptor
+
+
+async def test_capability_404_when_absent(aiohttp_client):
+    client = await aiohttp_client(create_app(_config()))
+    resp = await client.get("/capability")
+    assert resp.status == 404

@@ -1,0 +1,68 @@
+{
+  "capability": {
+    "kind": "live-runner",
+    "family": "screen-agent",
+    "modality": "video-understanding",
+    "variant": null,
+    "output_kind": "text",
+    "semantic_key": "live-runner:video-understanding:screen-agent:-",
+    "aliases": [
+      "screen-agent",
+      "bug-report",
+      "screen-recording"
+    ],
+    "good_for": "screen recording → structured bug report (Qwen2.5-VL + OCR)",
+    "io": {
+      "endpoint": "/analyze",
+      "inputs": {
+        "video": {
+          "wire": "video_b64",
+          "from": "source_url",
+          "required": true,
+          "constraints": {
+            "formats": [
+              "mp4",
+              "webm"
+            ],
+            "max_mb": 190
+          }
+        },
+        "preset": {
+          "wire": "preset",
+          "type": "enum",
+          "values": [
+            "bug-report",
+            "support-session",
+            "agent-eval"
+          ],
+          "default": "bug-report"
+        }
+      },
+      "output": {
+        "kind": "text",
+        "fields": [
+          "report_markdown",
+          "summary",
+          "timeline"
+        ],
+        "primary": "report_markdown"
+      }
+    },
+    "offering": {
+      "app": "emran/screen-agent",
+      "version": "1.0.0",
+      "mode": "persistent",
+      "capacity": 1,
+      "price": {
+        "price_per_unit": 2719,
+        "pixels_per_unit": 1,
+        "unit": "WEI",
+        "display_usd": 0.000139,
+        "display_unit": "second"
+      },
+      "sla": {
+        "class": "workstation"
+      }
+    }
+  }
+}

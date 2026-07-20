@@ -37,6 +37,13 @@ async def _handle_health(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "app": request.app.get("app_id", APP_ID)})
 
 
+async def _handle_capability(request: web.Request) -> web.Response:
+    capability = request.app.get("capability")
+    if capability is None:
+        raise web.HTTPNotFound(text="no capability descriptor configured")
+    return web.json_response(capability)
+
+
 async def _handle_analyze(request: web.Request) -> web.Response:
     payload = await request.json()
     video_b64 = payload.get("video_b64")
@@ -70,12 +77,15 @@ async def _handle_analyze(request: web.Request) -> web.Response:
     return web.json_response(response)
 
 
-def create_app(config: AnalysisConfig) -> web.Application:
+def create_app(config: AnalysisConfig, capability: dict | None = None) -> web.Application:
     """Build the aiohttp app without registration — used by tests directly."""
     app = web.Application(client_max_size=MAX_REQUEST_BYTES)
     app["config"] = config
+    if capability is not None:
+        app["capability"] = capability
     app.router.add_post("/analyze", _handle_analyze)
     app.router.add_get("/health", _handle_health)
+    app.router.add_get("/capability", _handle_capability)
     return app
 
 
@@ -117,6 +127,17 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip model loading entirely; heuristic/template engines only.",
     )
+    parser.add_argument(
+        "--no-register",
+        action="store_true",
+        help="Serve only; skip dynamic registration (static -liveRunnerConfig posture — "
+        "the orchestrator health-polls this runner instead).",
+    )
+    parser.add_argument(
+        "--capability-file",
+        default="",
+        help="Path to a capability descriptor JSON; served verbatim at GET /capability.",
+    )
     return parser.parse_args()
 
 
@@ -127,6 +148,17 @@ def main() -> None:
     config = AnalysisConfig.from_env(strict_models=args.strict_models)
     if args.force_fallback:
         config = AnalysisConfig(force_fallback_models=True)
+
+    capability = None
+    if args.capability_file:
+        capability = json.loads(Path(args.capability_file).read_text(encoding="utf-8"))
+
+    if args.no_register:
+        # Static posture: the orchestrator's -liveRunnerConfig health-polls us.
+        app = create_app(config, capability=capability)
+        app["app_id"] = args.app_id
+        web.run_app(app, host=args.host, port=args.port)
+        return
 
     # Import here so create_app() stays usable without the SDK installed.
     from livepeer_gateway.live_runner import register_runner
@@ -155,7 +187,7 @@ def main() -> None:
         with suppress(Exception):
             await app["registration"].close()  # Livepeer: 2
 
-    app = create_app(config)
+    app = create_app(config, capability=capability)
     app["app_id"] = args.app_id
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)

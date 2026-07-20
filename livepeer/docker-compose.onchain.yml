@@ -1,33 +1,41 @@
-# ON-CHAIN overlay: re-points the orchestrator at Arbitrum One mainnet and
-# advertises the box's Tailscale name so tailnet-shared clients can reach it.
+# ON-CHAIN overlay: Arbitrum One orchestrator, publicly reachable through a
+# Cloudflare tunnel, runner registered STATICALLY (capability-provider posture).
 #
 # Layered on the offchain base (image/ports/healthcheck inherited from there):
 #   docker compose -f livepeer/docker-compose.yml -f livepeer/docker-compose.onchain.yml \
 #     --env-file livepeer/.env.onchain up -d
 #
-# Secrets come from livepeer/.env.onchain (gitignored) and from keystore files
-# fetched out-of-repo (see comments below). Never commit either.
+# Bring-up ORDER matters: cloudflared tunnel first (the boot self-check GETs
+# https://${LR_HOST}:443/discovery through the real tunnel), runner second
+# (static registry health-checks it), orchestrator last.
 #
-#   TS_NAME        Tailscale MagicDNS name of the WINDOWS host (Docker publishes
-#                  8935 there), e.g. lpt.tail3396e5.ts.net
-#   ORCH_SECRET    registration password for runners (not 'abcdef' — clients
-#                  can't use it, but it gates who may register apps)
-#   ARB_RPC_URL    Arbitrum One RPC (public https://arb1.arbitrum.io/rpc works)
+# livepeer/.env.onchain (gitignored) provides:
+#   LR_HOST        public hostname on the tunnel (e.g. lr.gojiragpu.<tld>)
+#   ORCH_SECRET    kept for optional dynamic registration; static config doesn't need it
+#   ARB_RPC_URL    Arbitrum One RPC
 #   ORCH_ETH_ACCT  keystore address (here also the registered orch identity)
 #
 # Keystore + passphrase live in ~/.livepeer-onchain/ (chmod 600, outside git),
 # fetched from GCP Secret Manager (scope-stg-orch-wallet / scope-stg-orch-passphrase).
+#
+# runners.json: static registration of the host-side GPU runner (screen-agent on
+# :8989, health-polled at /health) with WEI pricing + the capability descriptor.
+# NOTE: this go-livepeer build ignores the descriptor field (closed schema) — it's
+# included forward-compatibly; the runner also serves it at GET /capability.
 
 services:
   orchestrator:
     command:
       - -orchestrator
       - -useLiveRunners
-      # Advertised to clients in discovery — must be reachable from the tailnet.
-      - -serviceAddr=${TS_NAME}:8935
+      # Advertised to clients in discovery AND self-checked at boot — resolves
+      # publicly via the Cloudflare tunnel, so the tunnel must be up first.
+      - -serviceAddr=${LR_HOST}:443
       - -httpAddr=0.0.0.0:8935
-      # Runners heartbeat here; ours is on this box, so loopback via published port.
+      # Kept for optional dynamic registrations; the screen-agent runner itself
+      # is static (runners.json) and gets health-polled, not heartbeated.
       - -liveRunnerAddr=https://localhost:8935
+      - -liveRunnerConfig=/runners.json
       - -orchSecret=${ORCH_SECRET}
       - -network=arbitrum-one-mainnet
       - -ethUrl=${ARB_RPC_URL}
@@ -36,8 +44,8 @@ services:
       - -ethPassword=/pw.txt
       # Same address: the staging orch wallet IS the registered orch identity.
       - -ethOrchAddr=${ORCH_ETH_ACCT}
-      # Legacy base price — unused for live runners (price comes from app
-      # registration) but an on-chain orchestrator won't boot without it.
+      # Legacy base price — unused for live runners (price comes from runners.json)
+      # but an on-chain orchestrator won't boot without it.
       - -pricePerUnit=0
       # EV per ticket; default (8e9) trips the 100-tickets-per-payment cap.
       - -ticketEV=1000000000000
@@ -46,9 +54,4 @@ services:
     volumes:
       - ${HOME}/.livepeer-onchain/keystore:/keystore:ro
       - ${HOME}/.livepeer-onchain/password.txt:/pw.txt:ro
-    # The orchestrator dials its own serviceAddr at boot and exits if
-    # unreachable. The container isn't on the tailnet, so resolve the tailnet
-    # name to the Docker host (where 8935 is published) INSIDE the container
-    # only; external clients still resolve the real Tailscale address.
-    extra_hosts:
-      - "${TS_NAME}:host-gateway"
+      - ./runners.json:/runners.json:ro
