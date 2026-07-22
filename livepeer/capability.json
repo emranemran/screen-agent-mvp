@@ -51,7 +51,7 @@
     "offering": {
       "app": "emran/screen-agent",
       "version": "1.0.0",
-      "mode": "persistent",
+      "mode": "single-shot",
       "capacity": 1,
       "price": {
         "price_per_unit": 2719,

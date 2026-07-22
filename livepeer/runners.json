@@ -5,7 +5,7 @@
       "app": "emran/screen-agent",
       "runner_url": "http://host.docker.internal:8989",
       "health_url": "/health",
-      "mode": "persistent",
+      "mode": "single-shot",
       "capacity": 1,
       "price_info": {
         "price_per_unit": 2719,
@@ -46,7 +46,7 @@
         "offering": {
           "app": "emran/screen-agent",
           "version": "1.0.0",
-          "mode": "persistent",
+          "mode": "single-shot",
           "capacity": 1,
           "price": {
             "price_per_unit": 2719,
